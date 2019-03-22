@@ -1,6 +1,9 @@
 import nltk
 from nltk.stem.lancaster import LancasterStemmer
 import os, json, datetime
+import numpy as np
+import time
+from text_classifier.functions import sigmoid, sigmoid_output_to_derivative
 
 stemmer = LancasterStemmer()
 
@@ -15,129 +18,86 @@ training_data = [{"class": "greeting", "sentence": "how are you?"},
                  {"class": "sandwich", "sentence": "make me a sandwich"},
                  {"class": "sandwich", "sentence": "can you make a sandwich?"},
                  {"class": "sandwich", "sentence": "having a sandwich today?"},
-                 {"class": "sandwich", "sentence": "what's for lunch?"}]
-
-# print("{} sentences in the training data. ".format(len(training_data)))
-
-words = []
-classes = []
-documents = []
-ignore_words = ['?']
-
-# loop through each sentence in our training data
-for pattern in training_data:
-    # tokenize each word in the sentence
-    w = nltk.word_tokenize(pattern['sentence'])
-    # add to our words list
-    words.extend(w)
-    # add to documents in our corpus
-    documents.append((w, pattern['class']))
-    # add to our classes list
-    if pattern['class'] not in classes:
-        classes.append(pattern['class'])
-
-# stem and lower each word and remove duplicates
-words = [stemmer.stem(w.lower()) for w in words if w not in ignore_words]
-words = list(set(words))
-
-# remove duplicates
-classes = list(set(classes))
-
-# print(len(documents), "documents")
-# print(len(classes), "classes", classes)
-# print(len(words), "unique stemmed words", words)
-
-# create our training data
-training = []
-output = []
-# create an empty array for our output
-output_empty = [0] * len(classes)
-
-# training set, bag of words for each sentence
-for doc in documents:
-    # initialize our bag of words
-    bag = []
-    # list of tokenized words for the pattern
-    pattern_words = doc[0]
-    # stem each word
-    pattern_words = [stemmer.stem(word.lower()) for word in pattern_words]
-    # create our bag of words array
-    for w in words:
-        bag.append(1) if w in pattern_words else bag.append(0)
-
-    training.append(bag)
-    # output is a '0' for each tag and '1' for current tag
-    output_row = list(output_empty)
-    output_row[classes.index(doc[1])] = 1
-    output.append(output_row)
-
-# sample training/output
-i = 0
-w = documents[i][0]
-# print([stemmer.stem(word.lower()) for word in w])
-# print(training[i])
-# print(output[i])
-
-import numpy as np
-import time
+                 {"class": "sandwich", "sentence": "what's for lunch?"},
+                 {'class': 'greeting', 'sentence': 'Hi, how are you?'}]
 
 
-# compute sigmoid nonlinearity
-def sigmoid(x):
-    output = 1 / (1 + np.exp(-x))
-    return output
+def build_bow_data(model=False):
+    model_words = []
+    model_classes = []
+    documents = []
+    ignore_words = ['?', ',']
+
+    if model:
+        model_words = model['words']
+        model_classes = model['classes']
+
+    # loop through each sentence in our training data
+    for pattern in training_data:
+        # tokenize each word in the sentence
+        w = nltk.word_tokenize(pattern['sentence'])
+        # add to our words list
+        model_words.extend(w)
+        # add to documents in our corpus
+        documents.append((w, pattern['class']))
+        # add to our classes list
+        if pattern['class'] not in model_classes:
+            model_classes.append(pattern['class'])
+
+    # stem and lower each word and remove duplicates
+    model_words = [stemmer.stem(w.lower()) for w in model_words if w not in ignore_words]
+    model_words = list(set(model_words))
+
+    # remove duplicates
+    model_classes = list(set(model_classes))
+
+    print(len(documents), "documents")
+    print(len(model_classes), "classes", model_classes)
+    print(len(model_words), "unique stemmed words", model_words)
+
+    # create our training data
+    result_training = []
+    result_output = []
+    # create an empty array for our output
+    output_empty = [0] * len(model_classes)
+
+    # training set, bag of words for each sentence
+    for doc in documents:
+        # initialize our bag of words
+        bag = []
+        # list of tokenized words for the pattern
+        pattern_words = doc[0]
+        # stem each word
+        pattern_words = [stemmer.stem(word.lower()) for word in pattern_words]
+        # create our bag of words array
+        for w in model_words:
+            bag.append(1) if w in pattern_words else bag.append(0)
+
+        result_training.append(bag)
+        # output is a '0' for each tag and '1' for current tag
+        output_row = list(output_empty)
+        output_row[model_classes.index(doc[1])] = 1
+        result_output.append(output_row)
+
+    # sample training/output
+    i = 0
+    w = documents[i][0]
+    print([stemmer.stem(word.lower()) for word in w])
+    print(result_training[i])
+    print(result_output[i])
+
+    if model:
+        model['words'] = model_words
+        model['classes'] = model_classes
+
+    return result_training, result_output
 
 
-# convert output of sigmoid function to its derivative
-def sigmoid_output_to_derivative(output):
-    return output * (1 - output)
+def train(X, y, model=None, hidden_neurons=10, alpha=1, epochs=50000, dropout=False, dropout_percent=0.5):
+    if model:
+        classes = model['classes']
+        words = model['words']
 
-
-def clean_up_sentence(sentence):
-    # tokenize the pattern
-    sentence_words = nltk.word_tokenize(sentence)
-    # stem each word
-    sentence_words = [stemmer.stem(word.lower()) for word in sentence_words]
-    return sentence_words
-
-
-# return bag of words array: 0 or 1 for each word in the bag that exists in the sentence
-def bow(sentence, words, show_details=False):
-    # tokenize the pattern
-    sentence_words = clean_up_sentence(sentence)
-    # bag of words
-    bag = [0] * len(words)
-    for s in sentence_words:
-        for i, w in enumerate(words):
-            if w == s:
-                bag[i] = 1
-                if show_details:
-                    print("found in bag: %s" % w)
-
-    return (np.array(bag))
-
-
-def think(sentence, synapses=None, show_details=False):
-    if synapses:
-        synapse_0 = synapses[0]
-        synapse_1 = synapses[1]
-    else:
-        synapse_0 = None
-        synapse_1 = None
-
-    x = bow(sentence.lower(), words, show_details)
-    if show_details:
-        print("sentence:", sentence, "\n bow:", x)
-    # input layer is our bag of words
-    l0 = x
-    # matrix multiplication of input and hidden layer
-    l1 = sigmoid(np.dot(l0, synapse_0))
-    # output layer
-    l2 = sigmoid(np.dot(l1, synapse_1))
-    return l2
-
-
-def train(X, y, hidden_neurons=10, alpha=1, epochs=50000, dropout=False, dropout_percent=0.5):
     print("Training with %s neurons, alpha:%s, dropout:%s %s" % (
         hidden_neurons, str(alpha), dropout, dropout_percent if dropout else ''))
     print("Input matrix: %sx%s    Output matrix: %sx%s" % (len(X), len(X[0]), 1, len(classes)))
@@ -218,14 +178,19 @@ def train(X, y, hidden_neurons=10, alpha=1, epochs=50000, dropout=False, dropout
         json.dump(synapse, outfile, indent=4, sort_keys=True)
     print("saved synapses to:", synapse_file)
 
+
 if __name__ == '__main__':
+    with open('synapses.json', 'r') as model_file:
+        model = json.load(model_file)
+
+    training, output = build_bow_data(model)
 
     X = np.array(training)
     y = np.array(output)
 
     start_time = time.time()
 
-    train(X, y, hidden_neurons=20, alpha=0.1, epochs=100000, dropout=False, dropout_percent=0.2)
+    train(X, y, model=model, hidden_neurons=40, alpha=0.1, epochs=400000, dropout=False, dropout_percent=0.2)
 
     elapsed_time = time.time() - start_time
-    print ("processing time:", elapsed_time, "seconds")
+    print("processing time:", elapsed_time, "seconds")
