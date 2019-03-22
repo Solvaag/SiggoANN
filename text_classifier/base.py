@@ -1,6 +1,6 @@
 import nltk
 from nltk.stem.lancaster import LancasterStemmer
-import os, json, datetime
+import os, json, datetime, csv
 import numpy as np
 import time
 from text_classifier.functions import sigmoid, sigmoid_output_to_derivative
@@ -9,7 +9,7 @@ stemmer = LancasterStemmer()
 
 packet = {'class': 'goof', 'sentence': 'how are you?'}
 
-training_data = [{"class": "greeting", "sentence": "how are you?"},
+TRAINING_DATA = [{"class": "greeting", "sentence": "how are you?"},
                  {"class": "greeting", "sentence": "how is your day?"}, {"class": "greeting", "sentence": "good day"},
                  {"class": "greeting", "sentence": "how is it going today?"},
                  {"class": "goodbye", "sentence": "have a nice day"}, {"class": "goodbye", "sentence": "see you later"},
@@ -26,14 +26,14 @@ def build_bow_data(model=False):
     model_words = []
     model_classes = []
     documents = []
-    ignore_words = ['?', ',']
+    ignore_words = ['?', ',', '\'', '\\']
 
     if model:
         model_words = model['words']
         model_classes = model['classes']
 
     # loop through each sentence in our training data
-    for pattern in training_data:
+    for pattern in TRAINING_DATA:
         # tokenize each word in the sentence
         w = nltk.word_tokenize(pattern['sentence'])
         # add to our words list
@@ -89,8 +89,12 @@ def build_bow_data(model=False):
     if model:
         model['words'] = model_words
         model['classes'] = model_classes
+    else:
+        model = {}
+        model['words'] = model_words
+        model['classes'] = model_classes
 
-    return result_training, result_output
+    return result_training, result_output, model
 
 
 def train(X, y, model=None, hidden_neurons=10, alpha=1, epochs=50000, dropout=False, dropout_percent=0.5):
@@ -179,11 +183,44 @@ def train(X, y, model=None, hidden_neurons=10, alpha=1, epochs=50000, dropout=Fa
     print("saved synapses to:", synapse_file)
 
 
-if __name__ == '__main__':
-    with open('synapses.json', 'r') as model_file:
-        model = json.load(model_file)
+def read_training_data(file_path):
 
-    training, output = build_bow_data(model)
+    with open(file_path, encoding='utf-8') as tsvfile:
+        reader = csv.DictReader(tsvfile, delimiter='\t')
+        TRAINING_DATA.clear()
+        count = 0
+        top_count = 400
+        for row in reader:
+            if count >= top_count:
+                break
+            sentiment = int(row['sentiment'])
+
+            if sentiment > 0:
+                sentiment = "positive"
+            else:
+                sentiment = 'negative'
+
+            packet = {'class':sentiment, 'sentence': row['review']}
+            TRAINING_DATA.append(packet)
+            count += 1
+            print("Line {}".format(count))
+
+
+
+
+
+
+if __name__ == '__main__':
+
+    read_training_data("../data/labeledTrainData.tsv")
+
+    try:
+        with open('synapses.json', 'r') as model_file:
+            model = json.load(model_file)
+    except:
+        model = None
+
+    training, output, model = build_bow_data(model)
 
     X = np.array(training)
     y = np.array(output)
