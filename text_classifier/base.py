@@ -227,7 +227,7 @@ if __name__ == '__main__':
 
     start_time = time.time()
 
-    train(X, y, model=model, hidden_neurons=40, alpha=0.1, epochs=400000, dropout=False, dropout_percent=0.2)
+    train(X, y, model=model, hidden_neurons=100, alpha=0.1, epochs=400000, dropout=False, dropout_percent=0.2)
 
     elapsed_time = time.time() - start_time
     print("processing time:", elapsed_time, "seconds")
