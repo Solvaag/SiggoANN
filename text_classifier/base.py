@@ -1,9 +1,10 @@
 import nltk
 from nltk.stem.lancaster import LancasterStemmer
-import os, json, datetime, csv
+import os, json, datetime, csv, re
 import numpy as np
 import time
 from text_classifier.functions import sigmoid, sigmoid_output_to_derivative
+
 
 stemmer = LancasterStemmer()
 
@@ -26,7 +27,7 @@ def build_bow_data(model=False):
     model_words = []
     model_classes = []
     documents = []
-    ignore_words = ['?', ',', '\'', '\\']
+    ignore_words = ['?', ',', '\'', '\\', 'br']
 
     if model:
         model_words = model['words']
@@ -45,7 +46,7 @@ def build_bow_data(model=False):
             model_classes.append(pattern['class'])
 
     # stem and lower each word and remove duplicates
-    model_words = [stemmer.stem(w.lower()) for w in model_words if w not in ignore_words]
+    model_words = [stemmer.stem(w.strip()) for w in model_words if w not in ignore_words]
     model_words = list(set(model_words))
 
     # remove duplicates
@@ -82,7 +83,7 @@ def build_bow_data(model=False):
     # sample training/output
     i = 0
     w = documents[i][0]
-    print([stemmer.stem(word.lower()) for word in w])
+    print(model_words)
     print(result_training[i])
     print(result_output[i])
 
@@ -182,6 +183,18 @@ def train(X, y, model=None, hidden_neurons=10, alpha=1, epochs=50000, dropout=Fa
         json.dump(synapse, outfile, indent=4, sort_keys=True)
     print("saved synapses to:", synapse_file)
 
+def clean_review(data):
+
+    # ignore_words = ['?', ',', '\'', '\\', '\"', ]
+
+    pattern = r"\W+"
+
+    result = re.sub(pattern, " ", data)
+
+    result = re.sub(r'\\\\', ' ', result)
+
+    return result
+
 
 def read_training_data(file_path):
 
@@ -189,7 +202,7 @@ def read_training_data(file_path):
         reader = csv.DictReader(tsvfile, delimiter='\t')
         TRAINING_DATA.clear()
         count = 0
-        top_count = 400
+        top_count = 100
         for row in reader:
             if count >= top_count:
                 break
@@ -200,7 +213,10 @@ def read_training_data(file_path):
             else:
                 sentiment = 'negative'
 
-            packet = {'class':sentiment, 'sentence': row['review']}
+            review = clean_review(row['review'])
+
+            packet = {'class':sentiment, 'sentence': review}
+            print(packet)
             TRAINING_DATA.append(packet)
             count += 1
             print("Line {}".format(count))
